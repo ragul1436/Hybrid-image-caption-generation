@@ -105,7 +105,7 @@ git push -u origin main
    - From dashboard, click "New +" → "PostgreSQL Database"
    - **Name:** `caption-db`
    - **Database:** `caption_db`
-   - **User:** `postgres`
+   - **User:** `captionuser` (Note: must NOT be 'postgres')
    - Render will auto-generate password
    - Copy the **Internal Database URL** (starts with `postgresql://`)
 
