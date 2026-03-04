@@ -6,7 +6,7 @@ services:
     branch: main
     region: oregon
     plan: standard
-    buildCommand: pip install -r backend/requirements.txt && alembic upgrade head
+    buildCommand: pip install -r backend/requirements.txt
     startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/v1/health
     healthCheckInterval: 10
@@ -57,7 +57,7 @@ services:
     postgresSQLVersion: "15"
     envVars:
       - key: POSTGRES_USER
-        value: postgres
+        value: captionuser
       - key: POSTGRES_PASSWORD
         generateValue: true
       - key: POSTGRES_DB
