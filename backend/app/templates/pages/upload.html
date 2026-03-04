@@ -1,0 +1,230 @@
+{% extends "layout.html" %}
+{% block title %}Upload{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <h2 class="text-2xl font-bold text-white mb-6">Upload Images</h2>
+
+    <!-- Dropzone -->
+    <div id="dropzone"
+        class="border-2 border-dashed rounded-xl p-10 flex flex-col items-center justify-center cursor-pointer transition-colors border-slate-600 hover:border-indigo-400 bg-slate-800">
+        <input type="file" id="file-input" multiple accept="image/*" class="hidden">
+        <svg class="h-12 w-12 text-slate-400 mb-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"/></svg>
+        <p class="text-slate-300 text-lg">Drag & drop some files here, or click to select files</p>
+        <p class="text-slate-500 text-sm mt-2">Supports JPG, PNG, WEBP</p>
+    </div>
+
+    <!-- Preview Grid -->
+    <div id="preview-grid" class="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 hidden"></div>
+
+    <!-- Upload Button -->
+    <div id="upload-actions" class="mt-6 flex justify-end hidden">
+        <button id="upload-btn" onclick="handleUpload()"
+            class="bg-indigo-600 text-white px-6 py-2 rounded-md font-medium hover:bg-indigo-500 disabled:opacity-50">
+            Upload & Generate
+        </button>
+    </div>
+
+    <!-- Processing Status -->
+    <div id="processing-status" class="mt-8 hidden">
+        <h3 class="text-lg font-bold text-white mb-4">Processing...</h3>
+        <div id="status-list" class="space-y-3"></div>
+    </div>
+
+    <!-- Results -->
+    <div id="results-section" class="mt-12 hidden">
+        <h3 class="text-xl font-bold text-white mb-4">Generation Results</h3>
+        <div id="results-list" class="space-y-6"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+let selectedFiles = [];
+
+document.addEventListener('DOMContentLoaded', () => {
+    requireAuth();
+
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('file-input');
+
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    dropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzone.classList.add('border-indigo-500', 'bg-slate-800/50');
+        dropzone.classList.remove('border-slate-600');
+    });
+
+    dropzone.addEventListener('dragleave', () => {
+        dropzone.classList.remove('border-indigo-500', 'bg-slate-800/50');
+        dropzone.classList.add('border-slate-600');
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('border-indigo-500', 'bg-slate-800/50');
+        dropzone.classList.add('border-slate-600');
+        addFiles(Array.from(e.dataTransfer.files));
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        addFiles(Array.from(e.target.files));
+    });
+});
+
+function addFiles(files) {
+    const imageFiles = files.filter(f => f.type.startsWith('image/'));
+    selectedFiles = [...selectedFiles, ...imageFiles];
+    renderPreviews();
+}
+
+function removeFile(index) {
+    selectedFiles.splice(index, 1);
+    renderPreviews();
+}
+
+function renderPreviews() {
+    const grid = document.getElementById('preview-grid');
+    const actions = document.getElementById('upload-actions');
+
+    if (selectedFiles.length === 0) {
+        grid.classList.add('hidden');
+        actions.classList.add('hidden');
+        return;
+    }
+
+    grid.classList.remove('hidden');
+    actions.classList.remove('hidden');
+    grid.innerHTML = '';
+
+    selectedFiles.forEach((file, idx) => {
+        const url = URL.createObjectURL(file);
+        const div = document.createElement('div');
+        div.className = 'relative group aspect-square rounded-lg overflow-hidden bg-slate-700';
+        div.innerHTML = `
+            <img src="${url}" alt="${file.name}" class="h-full w-full object-cover">
+            <button onclick="removeFile(${idx})"
+                class="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+            </button>
+        `;
+        grid.appendChild(div);
+    });
+}
+
+async function handleUpload() {
+    if (selectedFiles.length === 0) return;
+
+    const btn = document.getElementById('upload-btn');
+    const statusSection = document.getElementById('processing-status');
+    const statusList = document.getElementById('status-list');
+    const resultsSection = document.getElementById('results-section');
+    const resultsList = document.getElementById('results-list');
+
+    btn.disabled = true;
+    btn.textContent = 'Processing...';
+    statusSection.classList.remove('hidden');
+    statusList.innerHTML = '';
+
+    const formData = new FormData();
+    selectedFiles.forEach(file => formData.append('files', file));
+
+    try {
+        const res = await apiFetch('/api/v1/images/upload', {
+            method: 'POST',
+            body: formData,
+            rawBody: true
+        });
+
+        if (!res.ok) throw new Error('Upload failed');
+
+        const uploadedImages = await res.json();
+        showToast(`Uploaded ${uploadedImages.length} images successfully!`, 'success');
+
+        // Clear preview
+        selectedFiles = [];
+        renderPreviews();
+
+        // Poll for each image
+        for (const img of uploadedImages) {
+            const statusEl = document.createElement('div');
+            statusEl.id = `status-${img.id}`;
+            statusEl.className = 'flex items-center gap-3 bg-slate-800 p-3 rounded-lg border border-slate-700';
+            statusEl.innerHTML = `
+                <div class="animate-spin h-5 w-5 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
+                <span class="text-slate-300">${img.filename} - Processing...</span>
+            `;
+            statusList.appendChild(statusEl);
+
+            pollImageStatus(img, statusEl, resultsList, resultsSection);
+        }
+    } catch (err) {
+        showToast('Upload failed', 'error');
+        console.error(err);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Upload & Generate';
+    }
+}
+
+async function pollImageStatus(img, statusEl, resultsList, resultsSection) {
+    const maxRetries = 60;
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            const res = await apiFetch(`/api/v1/images/status/${img.id}`);
+            const data = await res.json();
+
+            if (data.status === 'done') {
+                // Fetch caption
+                const capRes = await apiFetch(`/api/v1/captions/${img.id}`);
+                const captions = await capRes.json();
+
+                statusEl.innerHTML = `
+                    <svg class="h-5 w-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+                    <span class="text-green-400">${img.filename} - Done!</span>
+                `;
+
+                if (captions.length > 0) {
+                    resultsSection.classList.remove('hidden');
+                    const cap = captions[0];
+                    const div = document.createElement('div');
+                    div.className = 'bg-slate-800 rounded-lg p-4 flex gap-4 items-start border border-slate-700';
+                    div.innerHTML = `
+                        <img src="${img.original_url}" alt="Result" class="w-32 h-32 object-cover rounded-md">
+                        <div>
+                            <p class="text-indigo-400 text-sm font-semibold mb-1">Confidence: ${((cap.confidence_score || 0) * 100).toFixed(1)}%</p>
+                            <p class="text-white text-lg">${cap.caption_text}</p>
+                            <div class="mt-2 flex gap-2">
+                                <span class="inline-flex items-center rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-gray-400 ring-1 ring-inset ring-gray-600/20">${cap.model_used}</span>
+                                <span class="inline-flex items-center rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-gray-400 ring-1 ring-inset ring-gray-600/20">${cap.language}</span>
+                            </div>
+                        </div>
+                    `;
+                    resultsList.appendChild(div);
+                }
+                return;
+            }
+
+            if (data.status === 'failed') {
+                statusEl.innerHTML = `
+                    <svg class="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"/></svg>
+                    <span class="text-red-400">${img.filename} - Failed: ${data.error || 'Unknown error'}</span>
+                `;
+                return;
+            }
+        } catch (e) {
+            // retry
+        }
+        await new Promise(r => setTimeout(r, 1000));
+    }
+
+    statusEl.innerHTML = `
+        <svg class="h-5 w-5 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+        <span class="text-yellow-400">${img.filename} - Timed out</span>
+    `;
+}
+</script>
+{% endblock %}

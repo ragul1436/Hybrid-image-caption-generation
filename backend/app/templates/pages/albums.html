@@ -1,0 +1,167 @@
+{% extends "layout.html" %}
+{% block title %}Albums{% endblock %}
+
+{% block content %}
+<div>
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-white">Albums</h2>
+        <button onclick="openCreateModal()"
+            class="flex items-center text-sm font-semibold bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-500 transition-colors">
+            <svg class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+            New Album
+        </button>
+    </div>
+
+    <div id="albums-loading" class="text-center text-slate-400">Loading...</div>
+
+    <div id="albums-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 hidden"></div>
+
+    <div id="albums-empty" class="hidden text-center py-20 bg-slate-800/50 rounded-lg border border-dashed border-slate-700">
+        <svg class="h-12 w-12 text-slate-600 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z"/></svg>
+        <h3 class="text-lg font-medium text-slate-300">No albums yet</h3>
+        <p class="text-slate-500 mt-2">Create your first album to organize your images.</p>
+    </div>
+</div>
+
+<!-- Create Album Modal -->
+<div id="create-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div class="bg-slate-800 rounded-lg p-6 w-full max-w-md border border-slate-700 shadow-xl">
+        <h3 class="text-lg font-bold text-white mb-4">Create New Album</h3>
+        <form id="create-album-form">
+            <input type="text" id="album-name" placeholder="Album Name" required
+                class="w-full bg-slate-700 border border-slate-600 rounded-md px-4 py-2 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-4">
+            <textarea id="album-desc" placeholder="Description (optional)" rows="3"
+                class="w-full bg-slate-700 border border-slate-600 rounded-md px-4 py-2 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-4"></textarea>
+            <div class="flex justify-end gap-3">
+                <button type="button" onclick="closeCreateModal()" class="px-4 py-2 text-slate-300 hover:text-white">Cancel</button>
+                <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-md font-medium">Create</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+let albums = [];
+
+document.addEventListener('DOMContentLoaded', async () => {
+    requireAuth();
+    await fetchAlbums();
+});
+
+async function fetchAlbums() {
+    const loading = document.getElementById('albums-loading');
+    const grid = document.getElementById('albums-grid');
+    const empty = document.getElementById('albums-empty');
+
+    try {
+        const res = await apiFetch('/api/v1/albums/');
+        albums = await res.json();
+
+        loading.style.display = 'none';
+
+        if (albums.length === 0) {
+            empty.classList.remove('hidden');
+            return;
+        }
+
+        grid.classList.remove('hidden');
+        renderAlbums();
+    } catch (err) {
+        loading.textContent = 'Failed to load albums';
+        console.error(err);
+    }
+}
+
+function renderAlbums() {
+    const grid = document.getElementById('albums-grid');
+    grid.innerHTML = '';
+
+    albums.forEach(album => {
+        const card = document.createElement('div');
+        card.className = 'group relative bg-slate-800 rounded-lg overflow-hidden border border-slate-700 hover:border-indigo-500/50 transition-colors p-6';
+        card.innerHTML = `
+            <a href="/albums/${album.id}" class="absolute inset-0 z-0"></a>
+            <div class="flex items-start justify-between relative z-10">
+                <div class="bg-indigo-500/10 p-3 rounded-lg text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
+                    <svg class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z"/></svg>
+                </div>
+                <button onclick="event.preventDefault(); handleDeleteAlbum('${album.id}')"
+                    class="text-slate-500 hover:text-red-500 transition-colors p-1">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"/></svg>
+                </button>
+            </div>
+            <div class="mt-4 relative z-10 pointer-events-none">
+                <h3 class="text-lg font-medium text-white group-hover:text-indigo-400 transition-colors">${album.name}</h3>
+                <p class="mt-1 text-sm text-slate-400">${album.image_count || 0} items</p>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+}
+
+function openCreateModal() {
+    document.getElementById('create-modal').classList.remove('hidden');
+    document.getElementById('album-name').focus();
+}
+
+function closeCreateModal() {
+    document.getElementById('create-modal').classList.add('hidden');
+    document.getElementById('album-name').value = '';
+    document.getElementById('album-desc').value = '';
+}
+
+document.getElementById('create-album-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('album-name').value.trim();
+    const description = document.getElementById('album-desc').value.trim();
+
+    if (!name) return;
+
+    try {
+        const res = await apiFetch('/api/v1/albums/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, description: description || null })
+        });
+
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.detail || 'Failed to create album');
+        }
+
+        const newAlbum = await res.json();
+        albums.unshift(newAlbum);
+
+        document.getElementById('albums-empty').classList.add('hidden');
+        document.getElementById('albums-grid').classList.remove('hidden');
+        renderAlbums();
+        closeCreateModal();
+        showToast('Album created', 'success');
+    } catch (err) {
+        showToast(err.message || 'Failed to create album', 'error');
+    }
+});
+
+async function handleDeleteAlbum(id) {
+    if (!confirm('Delete this album?')) return;
+
+    try {
+        const res = await apiFetch(`/api/v1/albums/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+            albums = albums.filter(a => a.id !== id);
+            renderAlbums();
+            if (albums.length === 0) {
+                document.getElementById('albums-grid').classList.add('hidden');
+                document.getElementById('albums-empty').classList.remove('hidden');
+            }
+            showToast('Album deleted', 'success');
+        }
+    } catch (err) {
+        showToast('Delete failed', 'error');
+    }
+}
+</script>
+{% endblock %}

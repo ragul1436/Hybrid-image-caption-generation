@@ -1,0 +1,64 @@
+services:
+  - type: web
+    name: hybrid-caption-backend
+    env: python
+    repo: https://github.com/YOUR_USERNAME/YOUR_REPO.git
+    branch: main
+    region: oregon
+    plan: standard
+    buildCommand: pip install -r backend/requirements.txt && alembic upgrade head
+    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+    healthCheckInterval: 10
+    healthCheckTimeout: 5
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.9"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: caption-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "15"
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: "7"
+      - key: BACKEND_CORS_ORIGINS
+        value: '["https://yourdomain.com"]'
+      - key: UPLOAD_DIR
+        value: ./uploads
+      - key: MAX_FILE_SIZE_MB
+        value: "10"
+      - key: DEFAULT_MODEL
+        value: blip
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        value: ""
+      - key: SMTP_PASS
+        value: ""
+    disk:
+      name: uploads-disk
+      path: /app/uploads
+      sizeGB: 5
+
+  - type: pserv
+    name: caption-db
+    env: postgres
+    plan: standard
+    region: oregon
+    ipAllowList: []
+    postgresSQLVersion: "15"
+    envVars:
+      - key: POSTGRES_USER
+        value: postgres
+      - key: POSTGRES_PASSWORD
+        generateValue: true
+      - key: POSTGRES_DB
+        value: caption_db

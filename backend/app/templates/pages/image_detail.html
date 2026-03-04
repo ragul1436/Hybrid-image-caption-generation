@@ -1,0 +1,198 @@
+{% extends "layout.html" %}
+{% block title %}Image Detail{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-8">
+    <a href="/gallery" class="flex items-center text-slate-400 hover:text-white mb-6 transition-colors">
+        <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18"/></svg>
+        Back to Gallery
+    </a>
+
+    <div id="image-loading" class="text-white text-center mt-20">Loading...</div>
+
+    <div id="image-content" class="grid grid-cols-1 lg:grid-cols-2 gap-10 hidden">
+        <!-- Left: Image -->
+        <div class="bg-slate-800 rounded-xl overflow-hidden border border-slate-700 shadow-xl">
+            <div class="relative aspect-video bg-slate-900 flex items-center justify-center">
+                <img id="detail-image" src="" alt="" class="max-w-full max-h-full object-contain">
+            </div>
+            <div class="p-4 bg-slate-800 border-t border-slate-700">
+                <div class="flex justify-between text-slate-400 text-sm mb-4">
+                    <div>
+                        <p class="font-semibold text-slate-300">File Name</p>
+                        <p id="detail-filename"></p>
+                    </div>
+                    <div class="text-right">
+                        <p class="font-semibold text-slate-300">Size</p>
+                        <p id="detail-size"></p>
+                    </div>
+                </div>
+                <button onclick="handleDeleteImage()"
+                    class="w-full flex items-center justify-center bg-red-500/10 text-red-500 hover:bg-red-500/20 py-2 rounded-md transition-colors border border-red-500/20">
+                    <svg class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"/></svg>
+                    Delete Image
+                </button>
+            </div>
+        </div>
+
+        <!-- Right: Captions -->
+        <div class="flex flex-col h-full">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-white">Captions</h2>
+                <button onclick="handleRegenerate()" id="regenerate-btn"
+                    class="flex items-center bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-md transition-colors disabled:opacity-50 shadow-lg shadow-indigo-500/20">
+                    <svg class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 0 0-2.455 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"/></svg>
+                    Regenerate
+                </button>
+            </div>
+
+            <div id="captions-list" class="space-y-4 overflow-y-auto pr-2 flex-1 max-h-[600px]"></div>
+
+            <div id="captions-empty" class="hidden text-slate-500 text-center py-10 bg-slate-800/50 rounded-lg border border-dashed border-slate-700">
+                <p>No captions generated yet.</p>
+                <button onclick="handleRegenerate()" class="text-indigo-400 hover:underline mt-2">Generate one now</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+let currentImageId = null;
+
+document.addEventListener('DOMContentLoaded', async () => {
+    requireAuth();
+
+    // Extract image ID from URL path: /image/{id}
+    const pathParts = window.location.pathname.split('/');
+    currentImageId = pathParts[pathParts.length - 1];
+
+    await fetchImageData();
+});
+
+async function fetchImageData() {
+    const loading = document.getElementById('image-loading');
+    const content = document.getElementById('image-content');
+
+    try {
+        const [imgRes, capRes] = await Promise.all([
+            apiFetch(`/api/v1/images/${currentImageId}`),
+            apiFetch(`/api/v1/captions/${currentImageId}`)
+        ]);
+
+        const image = await imgRes.json();
+        const captions = await capRes.json();
+
+        document.getElementById('detail-image').src = image.original_url;
+        document.getElementById('detail-image').alt = image.filename;
+        document.getElementById('detail-filename').textContent = image.filename;
+        document.getElementById('detail-size').textContent = ((image.file_size || 0) / 1024).toFixed(0) + ' KB';
+
+        renderCaptions(captions);
+
+        loading.style.display = 'none';
+        content.classList.remove('hidden');
+    } catch (err) {
+        showToast('Failed to load image data', 'error');
+        window.location.href = '/gallery';
+    }
+}
+
+function renderCaptions(captions) {
+    const list = document.getElementById('captions-list');
+    const empty = document.getElementById('captions-empty');
+
+    list.innerHTML = '';
+
+    if (captions.length === 0) {
+        empty.classList.remove('hidden');
+        list.classList.add('hidden');
+        return;
+    }
+
+    empty.classList.add('hidden');
+    list.classList.remove('hidden');
+
+    captions.forEach(cap => {
+        const div = document.createElement('div');
+        div.className = 'bg-slate-800 p-5 rounded-lg border border-slate-700 shadow-sm hover:border-indigo-500/50 transition-colors';
+        const confClass = (cap.confidence_score || 0) > 0.8 ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400';
+        div.innerHTML = `
+            <p class="text-lg text-slate-100 font-medium leading-relaxed mb-3">"${cap.caption_text}"</p>
+            <div class="flex items-center justify-between text-xs">
+                <div class="flex gap-2 items-center">
+                    <span class="px-2 py-0.5 rounded font-mono ${confClass}">${((cap.confidence_score || 0) * 100).toFixed(1)}%</span>
+                    <span class="px-2 py-0.5 rounded bg-slate-700 text-slate-300 font-mono border border-slate-600">${cap.model_used || 'Unknown'}</span>
+                    <span class="px-2 py-0.5 rounded bg-slate-700 text-slate-300 font-mono border border-slate-600 uppercase">${cap.language || 'EN'}</span>
+                </div>
+                <span class="text-slate-500">${new Date(cap.created_at).toLocaleDateString()}</span>
+            </div>
+        `;
+        list.appendChild(div);
+    });
+}
+
+async function handleDeleteImage() {
+    if (!confirm('Are you sure you want to delete this image and all its captions?')) return;
+
+    try {
+        const res = await apiFetch(`/api/v1/images/${currentImageId}`, { method: 'DELETE' });
+        if (res.ok) {
+            showToast('Image deleted', 'success');
+            window.location.href = '/gallery';
+        } else {
+            throw new Error('Delete failed');
+        }
+    } catch (err) {
+        showToast('Delete failed', 'error');
+    }
+}
+
+async function handleRegenerate() {
+    const btn = document.getElementById('regenerate-btn');
+    btn.disabled = true;
+    btn.innerHTML = `
+        <div class="animate-spin h-5 w-5 mr-2 border-2 border-white border-t-transparent rounded-full"></div>
+        Generating...
+    `;
+
+    try {
+        const res = await apiFetch('/api/v1/captions/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                image_id: currentImageId,
+                model: 'blip',
+                language: 'en',
+                decode_method: 'beam_search',
+                caption_length: 'medium'
+            })
+        });
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.detail || 'Generation failed');
+        }
+
+        const newCaption = await res.json();
+        showToast('New caption generated!', 'success');
+
+        // Refresh captions list
+        const capRes = await apiFetch(`/api/v1/captions/${currentImageId}`);
+        const captions = await capRes.json();
+        renderCaptions(captions);
+    } catch (err) {
+        showToast(err.message || 'Generation failed', 'error');
+        console.error(err);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `
+            <svg class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 0 0-2.455 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"/></svg>
+            Regenerate
+        `;
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,126 @@
+{% extends "layout.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div id="dashboard-content">
+    <h3 class="text-base font-semibold leading-6 text-white">Overview</h3>
+
+    <!-- Stats Cards -->
+    <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3" id="stats-grid">
+        <div class="overflow-hidden rounded-lg bg-slate-800 px-4 py-5 shadow sm:p-6 border border-slate-700">
+            <dt class="truncate text-sm font-medium text-gray-400">Total Images</dt>
+            <dd class="mt-1 text-3xl font-semibold tracking-tight text-white" id="stat-images">--</dd>
+            <div class="mt-2 flex items-baseline text-sm font-semibold">
+                <span class="text-green-500">
+                    <svg class="h-4 w-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18"/></svg>
+                    +12%
+                </span>
+                <span class="ml-2 text-gray-500">from last month</span>
+            </div>
+        </div>
+        <div class="overflow-hidden rounded-lg bg-slate-800 px-4 py-5 shadow sm:p-6 border border-slate-700">
+            <dt class="truncate text-sm font-medium text-gray-400">Captions Generated</dt>
+            <dd class="mt-1 text-3xl font-semibold tracking-tight text-white" id="stat-captions">--</dd>
+            <div class="mt-2 flex items-baseline text-sm font-semibold">
+                <span class="text-green-500">
+                    <svg class="h-4 w-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18"/></svg>
+                    +5%
+                </span>
+                <span class="ml-2 text-gray-500">from last month</span>
+            </div>
+        </div>
+        <div class="overflow-hidden rounded-lg bg-slate-800 px-4 py-5 shadow sm:p-6 border border-slate-700">
+            <dt class="truncate text-sm font-medium text-gray-400">Storage Used</dt>
+            <dd class="mt-1 text-3xl font-semibold tracking-tight text-white" id="stat-storage">--</dd>
+            <div class="mt-2 flex items-baseline text-sm font-semibold">
+                <span class="text-gray-500">from last month</span>
+            </div>
+        </div>
+    </dl>
+
+    <!-- Activity Chart -->
+    <div class="mt-8 bg-slate-800 p-6 rounded-lg border border-slate-700 shadow-lg">
+        <h4 class="text-lg font-medium text-white mb-4">Activity Overview</h4>
+        <div class="h-80 w-full" id="activity-chart">
+            <canvas id="activityCanvas"></canvas>
+        </div>
+    </div>
+</div>
+
+<div id="dashboard-loading" class="text-white text-center mt-20">Loading Dashboard...</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<!-- Chart.js for activity chart -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    requireAuth();
+
+    const loading = document.getElementById('dashboard-loading');
+    const content = document.getElementById('dashboard-content');
+    content.style.display = 'none';
+
+    try {
+        const [summaryRes, activityRes] = await Promise.all([
+            apiFetch('/api/v1/dashboard/summary'),
+            apiFetch('/api/v1/dashboard/activity')
+        ]);
+
+        const stats = await summaryRes.json();
+        const activity = await activityRes.json();
+
+        document.getElementById('stat-images').textContent = stats.total_images || 0;
+        document.getElementById('stat-captions').textContent = stats.total_captions || 0;
+        document.getElementById('stat-storage').textContent = (stats.storage_usage_mb || 0) + ' MB';
+
+        // Render chart
+        const ctx = document.getElementById('activityCanvas').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: activity.map(a => a.name),
+                datasets: [
+                    {
+                        label: 'Uploads',
+                        data: activity.map(a => a.uploads),
+                        backgroundColor: '#6366f1',
+                        borderRadius: 4
+                    },
+                    {
+                        label: 'Captions',
+                        data: activity.map(a => a.captions),
+                        backgroundColor: '#8b5cf6',
+                        borderRadius: 4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: '#94a3b8' } }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#94a3b8' },
+                        grid: { color: '#334155' }
+                    },
+                    y: {
+                        ticks: { color: '#94a3b8' },
+                        grid: { color: '#334155' }
+                    }
+                }
+            }
+        });
+
+        loading.style.display = 'none';
+        content.style.display = 'block';
+    } catch (err) {
+        loading.textContent = 'Failed to load dashboard data';
+        console.error(err);
+    }
+});
+</script>
+{% endblock %}

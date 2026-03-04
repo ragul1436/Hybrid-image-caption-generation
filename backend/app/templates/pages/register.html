@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Create Account{% endblock %}
+
+{% block body %}
+<div class="flex min-h-screen flex-1 flex-col justify-center px-6 py-12 lg:px-8 bg-slate-900">
+    <div class="sm:mx-auto sm:w-full sm:max-w-sm">
+        <a href="/" class="block text-center text-3xl font-bold bg-gradient-to-r from-indigo-500 to-violet-500 bg-clip-text text-transparent mb-6">CaptionAI</a>
+        <h2 class="text-center text-2xl font-bold leading-9 tracking-tight text-white">
+            Create an account
+        </h2>
+    </div>
+
+    <div class="mt-10 sm:mx-auto sm:w-full sm:max-w-sm bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-xl">
+        <form id="register-form" class="space-y-6">
+            <div>
+                <label for="name" class="block text-sm font-medium leading-6 text-white">Full Name</label>
+                <div class="mt-2">
+                    <input id="name" name="name" type="text" required
+                        class="block w-full rounded-md border-0 bg-slate-700/50 py-2 px-3 text-white shadow-sm ring-1 ring-inset ring-slate-600 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6">
+                </div>
+            </div>
+
+            <div>
+                <label for="email" class="block text-sm font-medium leading-6 text-white">Email address</label>
+                <div class="mt-2">
+                    <input id="email" name="email" type="email" required
+                        class="block w-full rounded-md border-0 bg-slate-700/50 py-2 px-3 text-white shadow-sm ring-1 ring-inset ring-slate-600 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6">
+                </div>
+            </div>
+
+            <div>
+                <label for="password" class="block text-sm font-medium leading-6 text-white">Password</label>
+                <div class="mt-2">
+                    <input id="password" name="password" type="password" required minlength="8"
+                        class="block w-full rounded-md border-0 bg-slate-700/50 py-2 px-3 text-white shadow-sm ring-1 ring-inset ring-slate-600 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6">
+                </div>
+                <p class="mt-1 text-xs text-slate-500">Minimum 8 characters</p>
+            </div>
+
+            <div>
+                <button type="submit" id="register-btn"
+                    class="flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold leading-6 text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50">
+                    Sign Up
+                </button>
+            </div>
+        </form>
+
+        <p class="mt-10 text-center text-sm text-gray-400">
+            Already a member?
+            <a href="/login" class="font-semibold leading-6 text-indigo-400 hover:text-indigo-300">Sign In</a>
+        </p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('register-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('register-btn');
+    btn.disabled = true;
+    btn.textContent = 'Registering...';
+
+    const name = document.getElementById('name').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+
+    // Validation
+    if (!name || name.length < 1) {
+        showToast('Name is required', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Sign Up';
+        return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        showToast('Please enter a valid email address', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Sign Up';
+        return;
+    }
+
+    if (password.length < 8) {
+        showToast('Password must be at least 8 characters', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Sign Up';
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/v1/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, email, password })
+        });
+
+        if (!res.ok) {
+            const data = await res.json();
+            let msg = 'Registration failed';
+            if (data.detail) {
+                msg = Array.isArray(data.detail)
+                    ? data.detail.map(d => d.msg || JSON.stringify(d)).join(' | ')
+                    : (typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
+            }
+            throw new Error(msg);
+        }
+
+        const data = await res.json();
+        localStorage.setItem('token', data.access_token);
+        showToast('Account created!', 'success');
+        setTimeout(() => window.location.href = '/dashboard', 500);
+    } catch (err) {
+        showToast(err.message || 'Registration failed', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Sign Up';
+    }
+});
+</script>
+{% endblock %}

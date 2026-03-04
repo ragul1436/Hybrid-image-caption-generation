@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block body %}
+{% include "partials/navbar.html" %}
+<main>
+    <div class="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
+        {% block content %}{% endblock %}
+    </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Highlight active nav link
+    document.addEventListener('DOMContentLoaded', function() {
+        const path = window.location.pathname;
+        document.querySelectorAll('.nav-link').forEach(link => {
+            if (link.getAttribute('href') === path) {
+                link.classList.remove('text-slate-300', 'hover:bg-slate-700', 'hover:text-white');
+                link.classList.add('bg-slate-900', 'text-white');
+            }
+        });
+    });
+</script>
+{% endblock %}
