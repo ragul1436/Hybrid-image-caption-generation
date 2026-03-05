@@ -7,10 +7,10 @@ services:
     region: oregon
     plan: standard
     buildCommand: pip install -r backend/requirements.txt
-    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT --workers 1
     healthCheckPath: /api/v1/health
-    healthCheckInterval: 10
-    healthCheckTimeout: 5
+    healthCheckInterval: 30
+    healthCheckTimeout: 10
     autoDeploy: true
     envVars:
       - key: PYTHON_VERSION
@@ -43,6 +43,12 @@ services:
         value: ""
       - key: SMTP_PASS
         value: ""
+      - key: TORCH_HOME
+        value: /app/cache
+      - key: HF_HOME
+        value: /app/cache
+      - key: PYTHONUNBUFFERED
+        value: "1"
     disk:
       name: uploads-disk
       path: /app/uploads

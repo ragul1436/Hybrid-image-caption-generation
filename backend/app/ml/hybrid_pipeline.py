@@ -2,13 +2,17 @@
 import time
 import random
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 try:
     import torch
     from PIL import Image
     from backend.app.ml.model_loader import loader
     TORCH_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    logger.warning(f"PyTorch not available: {e}")
     TORCH_AVAILABLE = False
 
 # Optional: Translation library
@@ -41,9 +45,11 @@ class HybridPipeline:
         Falls back to mock captions when torch/transformers are not installed.
         """
         start_time = time.time()
+        logger.info(f"Starting caption generation for {image_path} with model={model_name}, language={language}")
 
         if not TORCH_AVAILABLE:
             # --- Mock mode ---
+            logger.info("Using mock caption generation (torch not available)")
             import asyncio
             await asyncio.sleep(random.uniform(0.3, 1.0))  # simulate processing
             caption = random.choice(_MOCK_CAPTIONS)
@@ -51,12 +57,14 @@ class HybridPipeline:
             if language != "en":
                 caption = f"[{language}] {caption}"
             end_time = time.time()
-            return {
+            result = {
                 "caption": caption,
                 "confidence": confidence,
                 "model": f"{model_name} (mock)",
                 "time_ms": (end_time - start_time) * 1000,
             }
+            logger.info(f"Mock caption generated: {result}")
+            return result
 
         # --- Real mode (torch available) ---
         
@@ -64,32 +72,42 @@ class HybridPipeline:
         try:
             if not os.path.exists(image_path):
                 raise FileNotFoundError(f"Image file not found at: {image_path}")
+            logger.info(f"Loading image from {image_path}")
             raw_image = Image.open(image_path).convert('RGB')
+            logger.info(f"Image loaded successfully: {raw_image.size}")
         except FileNotFoundError as e:
+            logger.error(f"Image file not found: {e}")
             raise ValueError(f"Failed to load image: {e}")
         except Exception as e:
+            logger.error(f"Failed to load image from {image_path}: {e}", exc_info=True)
             raise ValueError(f"Failed to load image from {image_path}: {e}")
 
         caption = ""
         confidence = 0.0
         
         if model_name.lower() == "blip":
-            processor, model = loader.load_blip()
-            
-            # Prepare inputs
-            # conditional=True -> image captioning
-            # conditional=False -> unconditional image captioning (not applicable here usually)
-            inputs = processor(raw_image, return_tensors="pt").to(self.device)
-            
-            # Generate
-            # kwargs can include max_length, num_beams, etc.
-            out = model.generate(**inputs, max_new_tokens=50)
-            
-            # Decode
-            caption = processor.decode(out[0], skip_special_tokens=True)
-            
-            # Mock confidence for BLIP (it doesn't return probabilities easily in generate)
-            confidence = 0.95 
+            try:
+                logger.info(f"Loading BLIP model on device {self.device}...")
+                processor, model = loader.load_blip()
+                logger.info("BLIP model loaded successfully")
+                
+                # Prepare inputs
+                logger.info("Processing image input...")
+                inputs = processor(raw_image, return_tensors="pt").to(self.device)
+                
+                # Generate
+                logger.info("Generating caption...")
+                out = model.generate(**inputs, max_new_tokens=50)
+                
+                # Decode
+                caption = processor.decode(out[0], skip_special_tokens=True)
+                logger.info(f"Caption generated: {caption}")
+                
+                # Mock confidence for BLIP (it doesn't return probabilities easily in generate)
+                confidence = 0.95
+            except Exception as e:
+                logger.error(f"BLIP model generation failed: {e}", exc_info=True)
+                raise ValueError(f"Caption generation failed: {e}")
 
         elif model_name.lower() == "custom":
             # Implement custom CNN+Transformer pipeline inference
@@ -114,12 +132,14 @@ class HybridPipeline:
         end_time = time.time()
         generation_time = (end_time - start_time) * 1000 # ms
 
-        return {
+        result = {
             "caption": caption,
             "confidence": confidence,
             "model": model_name,
             "time_ms": generation_time
         }
+        logger.info(f"Caption generation completed in {generation_time:.2f}ms: {result}")
+        return result
 
     def translate_caption(self, text: str, target_lang: str):
         # Placeholder or use Helsinki-NLP/opus-mt

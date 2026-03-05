@@ -8,11 +8,20 @@ from backend.app.api.routes import auth, images, captions, albums, dashboard, ad
 from backend.app.api.routes import settings as settings_router 
 from fastapi.staticfiles import StaticFiles
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    await init_db()
+    try:
+        logger.info("[STARTUP] Initializing database...")
+        await init_db()
+        logger.info("[STARTUP] Database initialized successfully")
+    except Exception as e:
+        logger.error(f"[STARTUP] Database initialization failed: {e}", exc_info=True)
+        # Don't crash the app if DB init fails during startup
     yield
     # Shutdown
 
