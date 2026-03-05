@@ -28,29 +28,41 @@ class ModelLoader:
     def load_blip(self):
         if self.blip_model is None:
             if self.load_error:
+                logger.error(f"Model load previously failed: {self.load_error}")
                 raise RuntimeError(f"Previous model load failed: {self.load_error}")
             
             try:
                 logger.info("Loading BLIP model (this may take 1-2 minutes on first load)...")
+                
+                # Ensure cache directory exists
+                cache_dir = "/app/cache"
+                os.makedirs(cache_dir, exist_ok=True)
+                
                 # Set environment variables to reduce memory usage
-                os.environ['TORCH_HOME'] = '/app/cache'
-                os.environ['HF_HOME'] = '/app/cache'
+                os.environ['TORCH_HOME'] = cache_dir
+                os.environ['HF_HOME'] = cache_dir
                 
                 # Reduce memory footprint
-                import torch
                 torch.set_float32_matmul_precision('medium')
                 
+                logger.info("Downloading BLIP processor...")
                 self.blip_processor = BlipProcessor.from_pretrained(
                     "Salesforce/blip-image-captioning-base",
-                    cache_dir="/app/cache"
+                    cache_dir=cache_dir
                 )
+                logger.info("Processor downloaded successfully")
+                
+                logger.info("Downloading BLIP model...")
                 self.blip_model = BlipForConditionalGeneration.from_pretrained(
                     "Salesforce/blip-image-captioning-base",
-                    cache_dir="/app/cache"
+                    cache_dir=cache_dir
                 )
+                logger.info("Model downloaded successfully")
+                
                 # Move to GPU if available, otherwise keep on CPU
                 device = "cuda" if torch.cuda.is_available() else "cpu"
-                self.blip_model.to(device)
+                logger.info(f"Moving model to device: {device}")
+                self.blip_model = self.blip_model.to(device)
                 self.blip_model.eval()  # Set to eval mode
                 logger.info(f"BLIP model loaded successfully on {device}")
             except Exception as e:

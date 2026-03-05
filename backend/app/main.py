@@ -2,8 +2,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from sqlalchemy import select
 from backend.app.core.config import settings
-from backend.app.core.database import init_db
+from backend.app.core.database import init_db, AsyncSessionLocal
 from backend.app.api.routes import auth, images, captions, albums, dashboard, admin, pages
 from backend.app.api.routes import settings as settings_router 
 from fastapi.staticfiles import StaticFiles
@@ -71,4 +72,20 @@ app.include_router(pages.router, tags=["pages"])
 @app.get(f"{settings.API_V1_STR}/health", tags=["health"])
 async def health_check():
     """Health check endpoint for container orchestration."""
-    return {"status": "healthy", "service": settings.PROJECT_NAME}
+    health_info = {
+        "status": "healthy",
+        "service": settings.PROJECT_NAME,
+        "upload_dir": settings.UPLOAD_DIR,
+        "upload_dir_exists": os.path.exists(settings.UPLOAD_DIR)
+    }
+    
+    # Check if we can access the database
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(select(1))
+            health_info["database"] = "ok"
+    except Exception as e:
+        logger.warning(f"Database health check failed: {e}")
+        health_info["database"] = f"error: {str(e)}"
+    
+    return health_info

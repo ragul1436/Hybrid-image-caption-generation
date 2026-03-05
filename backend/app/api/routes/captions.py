@@ -28,44 +28,64 @@ async def generate_caption(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(deps.get_current_user)
 ) -> Any:
+    logger.info(f"[CAPTION_GEN] Request: image_id={request.image_id}, model={request.model}, user={current_user.id}")
+    
     # 1. Get Image
-    result = await db.execute(select(Image).where(Image.id == request.image_id))
-    image = result.scalars().first()
-    if not image:
-        raise HTTPException(status_code=404, detail="Image not found")
+    try:
+        result = await db.execute(select(Image).where(Image.id == request.image_id))
+        image = result.scalars().first()
+        if not image:
+            logger.error(f"[CAPTION_GEN] Image not found: {request.image_id}")
+            raise HTTPException(status_code=404, detail="Image not found")
+            
+        if image.user_id != current_user.id:
+            logger.error(f"[CAPTION_GEN] Authorization failed: image {request.image_id} belongs to user {image.user_id}, not {current_user.id}")
+            raise HTTPException(status_code=403, detail="Not authorized")
         
-    if image.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized")
+        logger.info(f"[CAPTION_GEN] Image found: {image.filename}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[CAPTION_GEN] Database error while fetching image: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
     # 2. Run Pipeline
     image_path = os.path.join(settings.UPLOAD_DIR, image.filename)
-    logger.info(f"Generating caption for image_path={image_path}, model={request.model}")
+    logger.info(f"[CAPTION_GEN] Generating caption for image_path={image_path}, model={request.model}")
     
     try:
-        res = await _get_pipeline().generate_caption(
+        pipeline = _get_pipeline()
+        logger.info(f"[CAPTION_GEN] Pipeline loaded, calling generate_caption()")
+        res = await pipeline.generate_caption(
             image_path=image_path,
             model_name=request.model,
             language=request.language
         )
-        logger.info(f"Caption result: {res}")
+        logger.info(f"[CAPTION_GEN] Caption result: {res}")
     except Exception as e:
-        logger.error(f"Caption generation failed: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = f"{type(e).__name__}: {str(e)}"
+        logger.error(f"[CAPTION_GEN] Caption generation failed: {error_msg}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Generation failed: {error_msg}")
         
     # 3. Save to DB
-    caption = Caption(
-        image_id=image.id,
-        user_id=current_user.id,
-        caption_text=res["caption"],
-        confidence_score=res["confidence"],
-        model_used=request.model,
-        language=request.language,
-        generation_time=res["time_ms"],
-        decode_method=request.decode_method
-    )
-    db.add(caption)
-    await db.commit()
-    await db.refresh(caption)
+    try:
+        caption = Caption(
+            image_id=image.id,
+            user_id=current_user.id,
+            caption_text=res["caption"],
+            confidence_score=res["confidence"],
+            model_used=request.model,
+            language=request.language,
+            generation_time=res["time_ms"],
+            decode_method=request.decode_method
+        )
+        db.add(caption)
+        await db.commit()
+        await db.refresh(caption)
+        logger.info(f"[CAPTION_GEN] Caption saved to DB: {caption.id}")
+    except Exception as e:
+        logger.error(f"[CAPTION_GEN] Failed to save caption to DB: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to save caption: {str(e)}")
     
     return caption
 
