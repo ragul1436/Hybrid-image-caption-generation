@@ -8,9 +8,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Convert standard PostgreSQL URL to asyncpg if needed
+database_url = settings.DATABASE_URL
+if database_url.startswith("postgresql://"):
+    database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
 # Create Async Engine with connect timeout
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    database_url,
     echo=False,
     future=True,
     poolclass=NullPool,
