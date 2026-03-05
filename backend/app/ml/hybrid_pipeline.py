@@ -1,6 +1,7 @@
 
 import time
 import random
+import os
 
 try:
     import torch
@@ -61,9 +62,13 @@ class HybridPipeline:
         
         # Load Image
         try:
+            if not os.path.exists(image_path):
+                raise FileNotFoundError(f"Image file not found at: {image_path}")
             raw_image = Image.open(image_path).convert('RGB')
-        except Exception as e:
+        except FileNotFoundError as e:
             raise ValueError(f"Failed to load image: {e}")
+        except Exception as e:
+            raise ValueError(f"Failed to load image from {image_path}: {e}")
 
         caption = ""
         confidence = 0.0

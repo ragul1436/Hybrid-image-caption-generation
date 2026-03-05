@@ -88,7 +88,7 @@ async def _process_image_generate(image_id: str, user_id: str):
                 JOB_STATUS[image_id]["error"] = "Image not found"
                 return
 
-            image_path = f"{settings.UPLOAD_DIR}/{image.filename}"
+            image_path = os.path.join(settings.UPLOAD_DIR, image.filename)
             # Call pipeline
             try:
                 result = await _get_pipeline().generate_caption(image_path=image_path, model_name=settings.DEFAULT_MODEL, language="en")

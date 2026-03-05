@@ -21,7 +21,9 @@ class Settings(BaseSettings):
     BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173", "http://localhost:8000"]
 
     # File Uploads
-    UPLOAD_DIR: str = "./uploads"
+    # Default to /app/uploads (Render persistent disk), can override with UPLOAD_DIR env var
+    # For local development, set UPLOAD_DIR=./uploads in .env
+    UPLOAD_DIR: str = "/app/uploads"
     MAX_FILE_SIZE_MB: int = 10
     
     # ML Config

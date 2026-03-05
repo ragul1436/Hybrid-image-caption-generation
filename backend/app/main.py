@@ -24,11 +24,12 @@ app = FastAPI(
 
 # Mount uploads directory so image files saved under `settings.UPLOAD_DIR` are served
 uploads_dir = settings.UPLOAD_DIR
-# If a relative path, make it absolute relative to project root
+# Ensure absolute path
 if not os.path.isabs(uploads_dir):
     uploads_dir = os.path.abspath(os.path.join(os.getcwd(), uploads_dir))
 os.makedirs(uploads_dir, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+print(f"[STARTUP] Mounted uploads directory: {uploads_dir}")
 
 # Mount static files (CSS, JS) for templates
 static_dir = os.path.join(os.path.dirname(__file__), "static")

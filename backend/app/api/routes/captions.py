@@ -2,6 +2,7 @@
 import uuid
 import logging
 import traceback
+import os
 from typing import List, Any
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,7 +38,7 @@ async def generate_caption(
         raise HTTPException(status_code=403, detail="Not authorized")
 
     # 2. Run Pipeline
-    image_path = f"{settings.UPLOAD_DIR}/{image.filename}"
+    image_path = os.path.join(settings.UPLOAD_DIR, image.filename)
     logger.info(f"Generating caption for image_path={image_path}, model={request.model}")
     
     try:
